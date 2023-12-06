@@ -5,22 +5,22 @@
  * 2、resolve 和 reject 执行时改变状态且无法回退
  */
 
-let result = new Promise((resolve, reject) => {
-	resolve("12312313");
-});
-
-result
-	.then(
-		(success) => {
-			console.log("success", success);
-		},
-		(error) => {
-			console.log("error", error);
-		},
-	)
-	.then(() => {
-		console.log("1231");
-	});
+// let result = new Promise((resolve, reject) => {
+// 	resolve("12312313");
+// });
+//
+// result
+// 	.then(
+// 		(success) => {
+// 			console.log("success", success);
+// 		},
+// 		(error) => {
+// 			console.log("error", error);
+// 		},
+// 	)
+// 	.then(() => {
+// 		console.log("1231");
+// 	});
 
 const PENDING = "pending";
 const FULFILLED = "fulfilled";
@@ -32,8 +32,12 @@ class MyPromise {
 	reason = undefined;
 
 	// then 中的回调函数（单次调用）
-	successFn = undefined;
-	errorFn = undefined;
+	// successFn = undefined;
+	// errorFn = undefined;
+
+	// then 的多次调用
+	successFn = [];
+	errorFn = [];
 
 	constructor(executor) {
 		executor(this.resolve, this.reject);
@@ -44,7 +48,10 @@ class MyPromise {
 		this.status = FULFILLED;
 		this.value = value;
 		// 处理异步逻辑
-		this.successFn && this.successFn(this.value);
+		// this.successFn && this.successFn(this.value);
+		while (this.successFn.length) {
+			this.successFn.shift()(this.value);
+		}
 	};
 
 	reject = (reason) => {
@@ -52,19 +59,24 @@ class MyPromise {
 		this.status = REJECTED;
 		this.reason = reason;
 		// 处理异步逻辑
-		this.errorFn && this.errorFn(this.reason);
+		// this.errorFn && this.errorFn(this.reason);
+		while (this.errorFn.length) {
+			this.errorFn.shift()(this.reason);
+		}
 	};
 
-	then = (success, error) => {
+	then(success, error) {
 		if (this.status === FULFILLED) {
 			success(this.value);
 		} else if (this.status === REJECTED) {
 			error(this.reason);
 		} else {
-			this.successFn = success;
-			this.errorFn = error;
+			// this.successFn = success;
+			// this.errorFn = error;
+			this.successFn.push(success);
+			this.errorFn.push(error);
 		}
-	};
+	}
 }
 
 // 验证一：同步的成功与失败
@@ -82,17 +94,28 @@ class MyPromise {
 // );
 
 // 验证二：异步的成功与失败
-let result2 = new MyPromise((resolve, reject) => {
-	setTimeout(() => {
-		// resolve("异步传递的成功数据");
-		reject("异步传递的失败数据");
-	}, 1000);
+// let result2 = new MyPromise((resolve, reject) => {
+// 	setTimeout(() => {
+// 		// resolve("异步传递的成功数据");
+// 		reject("异步传递的失败数据");
+// 	}, 1000);
+// });
+// result2.then(
+// 	(res) => {
+// 		console.log(res);
+// 	},
+// 	(err) => {
+// 		console.log(err);
+// 	},
+// );
+
+// 验证三：then 的多次调用
+let result3 = new MyPromise((resolve, reject) => {
+	resolve(1);
 });
-result2.then(
-	(res) => {
-		console.log(res);
-	},
-	(err) => {
-		console.log(err);
-	},
-);
+result3.then((res) => {
+	console.log("第一个 then", res);
+});
+result3.then((res) => {
+	console.log("第二个 then", res);
+});
