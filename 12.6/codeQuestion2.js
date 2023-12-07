@@ -3,24 +3,8 @@
  *
  * 1、Promise 是一个类，new 的时候需要传入一个 执行器，并且立即执行
  * 2、resolve 和 reject 执行时改变状态且无法回退
+ * 3、想要实现 then 的链式调用，即需要在 then 里返回一个 promise
  */
-
-// let result = new Promise((resolve, reject) => {
-// 	resolve("12312313");
-// });
-//
-// result
-// 	.then(
-// 		(success) => {
-// 			console.log("success", success);
-// 		},
-// 		(error) => {
-// 			console.log("error", error);
-// 		},
-// 	)
-// 	.then(() => {
-// 		console.log("1231");
-// 	});
 
 const PENDING = "pending";
 const FULFILLED = "fulfilled";
@@ -30,10 +14,6 @@ class MyPromise {
 	status = PENDING;
 	value = undefined;
 	reason = undefined;
-
-	// then 中的回调函数（单次调用）
-	// successFn = undefined;
-	// errorFn = undefined;
 
 	// then 的多次调用
 	successFn = [];
@@ -48,9 +28,8 @@ class MyPromise {
 		this.status = FULFILLED;
 		this.value = value;
 		// 处理异步逻辑
-		// this.successFn && this.successFn(this.value);
 		while (this.successFn.length) {
-			this.successFn.shift()(this.value);
+			this.successFn.shift()();
 		}
 	};
 
@@ -59,63 +38,92 @@ class MyPromise {
 		this.status = REJECTED;
 		this.reason = reason;
 		// 处理异步逻辑
-		// this.errorFn && this.errorFn(this.reason);
 		while (this.errorFn.length) {
-			this.errorFn.shift()(this.reason);
+			this.errorFn.shift()();
 		}
 	};
 
 	then(success, error) {
-		if (this.status === FULFILLED) {
-			success(this.value);
-		} else if (this.status === REJECTED) {
-			error(this.reason);
-		} else {
-			// this.successFn = success;
-			// this.errorFn = error;
-			this.successFn.push(success);
-			this.errorFn.push(error);
-		}
+		// then 的回调里，如果结果是 普通值，则直接 resolve 出去
+		// 如果是 Promise 对象，则根据状态来决定调用 resolve 还是 reject
+		let thenResult = new MyPromise((resolve, reject) => {
+			if (this.status === FULFILLED) {
+				setTimeout(() => {
+					let result = success(this.value);
+					resolvePromise(thenResult, result, resolve, reject);
+				}, 0);
+			} else if (this.status === REJECTED) {
+				setTimeout(() => {
+					let result = error(this.reason);
+					resolvePromise(thenResult, result, resolve, reject);
+				}, 0);
+			} else {
+				this.successFn.push(() => {
+					setTimeout(() => {
+						let result = success(this.value);
+						resolvePromise(thenResult, result, resolve, reject);
+					});
+				});
+				this.errorFn.push(() => {
+					setTimeout(() => {
+						let result = error(this.reason);
+						resolvePromise(thenResult, result, resolve, reject);
+					});
+				});
+			}
+		});
+		return thenResult;
 	}
 }
 
-// 验证一：同步的成功与失败
-// let result1 = new MyPromise((resolve, reject) => {
-// 	// resolve("成功传递的数据");
-// 	reject("失败传递的数据");
-// });
-// result1.then(
-// 	(res) => {
-// 		console.log(res);
-// 	},
-// 	(err) => {
-// 		console.log(err);
-// 	},
-// );
+const resolvePromise = (thenResult, successResult, resolve, reject) => {
+	if (thenResult === successResult) {
+		return reject(
+			new TypeError("Chaining cycle detected for promise #<Promise>"),
+		);
+	}
+	if (successResult instanceof MyPromise) {
+		successResult.then(resolve, reject);
+	} else {
+		resolve(successResult);
+	}
+};
 
-// 验证二：异步的成功与失败
-// let result2 = new MyPromise((resolve, reject) => {
-// 	setTimeout(() => {
-// 		// resolve("异步传递的成功数据");
-// 		reject("异步传递的失败数据");
-// 	}, 1000);
-// });
-// result2.then(
-// 	(res) => {
-// 		console.log(res);
-// 	},
-// 	(err) => {
-// 		console.log(err);
-// 	},
-// );
-
-// 验证三：then 的多次调用
-let result3 = new MyPromise((resolve, reject) => {
-	resolve(1);
+let promise1 = new MyPromise((resolve, reject) => {
+	resolve(1111);
 });
-result3.then((res) => {
-	console.log("第一个 then", res);
-});
-result3.then((res) => {
-	console.log("第二个 then", res);
-});
+promise1
+	.then(
+		(res) => {
+			console.log("第一次 then，接收成功的同步数据", res);
+			return new MyPromise((resolve, reject) => {
+				setTimeout(() => {
+					resolve(2222);
+				}, 1000);
+			});
+		},
+		(err) => {
+			console.log("第一次 then，接收失败的同步数据", err);
+		},
+	)
+	.then(
+		(res2) => {
+			console.log("第二次 then，接收成功的异步数据", res2);
+			return new MyPromise((resolve, reject) => {
+				setTimeout(() => {
+					resolve(3333);
+				}, 2000);
+			});
+		},
+		(err2) => {
+			console.log("第二次 then，接收失败的同步数据", err2);
+		},
+	)
+	.then(
+		(res3) => {
+			console.log("第三次 then，接收成功的异步数据", res3);
+		},
+		(err3) => {
+			console.log("第三次 then，接收失败的异步数据", err3);
+		},
+	);
