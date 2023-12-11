@@ -106,6 +106,36 @@ class MyPromise {
 		});
 		return thenResult;
 	}
+
+	static all(array) {
+		let resultArray = [];
+		let tempIndex = 0;
+
+		return new MyPromise((resolve, reject) => {
+			function addData(key, value) {
+				resultArray[key] = value;
+				tempIndex++;
+				if (tempIndex === array.length) {
+					resolve(resultArray);
+				}
+			}
+			for (let i = 0; i < array.length; i++) {
+				let current = array[i];
+				if (current instanceof MyPromise) {
+					current.then(
+						(value) => {
+							addData(i, value);
+						},
+						(err) => {
+							reject(err);
+						},
+					);
+				} else {
+					addData(i, array[i]);
+				}
+			}
+		});
+	}
 }
 
 const resolvePromise = (thenResult, successResult, resolve, reject) => {
@@ -174,3 +204,27 @@ promise1
 // 			console.log("第三次 then，接收失败的异步数据", err3);
 // 		},
 // 	);
+
+function test1() {
+	return new MyPromise((resolve, reject) => {
+		setTimeout(() => {
+			resolve("p1");
+		}, 2000);
+	});
+}
+
+function test2() {
+	return new MyPromise((resolve, reject) => {
+		// resolve("p2");
+		reject("一个失败都失败");
+	});
+}
+
+MyPromise.all(["a", "b", test1(), test2(), "c"]).then(
+	(res) => {
+		console.log(res);
+	},
+	(error) => {
+		console.log(error);
+	},
+);
